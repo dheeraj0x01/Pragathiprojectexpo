@@ -1,0 +1,164 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  COORDINATOR
+  JUDGE
+  VOLUNTEER
+  PARTICIPANT
+}
+
+enum EventCategory {
+  TECHNICAL
+  CULTURAL
+  SPORTS
+  WORKSHOP
+  EXPO
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  COMPLETED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  CHECKED_IN
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  MOCK_PAID
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  phone         String?
+  role          Role           @default(PARTICIPANT)
+  college       String         @default("SR University")
+  department    String?
+  rollNo        String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  registrations Registration[]
+  checkIns      CheckIn[]      @relation("VolunteerCheckIns")
+  judgeScores   JudgeScore[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Event {
+  id              String         @id @default(cuid())
+  title           String
+  slug            String         @unique
+  description     String         @db.Text
+  category        EventCategory
+  status          EventStatus    @default(DRAFT)
+  bannerUrl       String?
+  venue           String
+  eventDate       DateTime
+  maxParticipants Int            @default(100)
+  registrationFee Decimal        @default(0.00)
+  minTeamSize     Int            @default(1)
+  maxTeamSize     Int            @default(1)
+  
+  createdById     String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  registrations   Registration[]
+  judgeScores     JudgeScore[]
+
+  @@index([category])
+  @@index([status])
+}
+
+model Registration {
+  id              String             @id @default(cuid())
+  ticketCode      String             @unique @default(cuid())
+  eventId         String
+  event           Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamName        String?
+  teamMembers     String?            // JSON stringified list of members
+  status          RegistrationStatus @default(CONFIRMED)
+  paymentStatus   PaymentStatus      @default(MOCK_PAID)
+  paymentTxnId    String?            // College Payment Gateway Txn Ref Placeholder
+  qrCodeUrl       String?
+  
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  checkIns        CheckIn[]
+
+  @@index([ticketCode])
+  @@index([eventId, userId])
+}
+
+model CheckIn {
+  id              String       @id @default(cuid())
+  registrationId  String
+  registration    Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  volunteerId     String
+  volunteer       User         @relation("VolunteerCheckIns", fields: [volunteerId], references: [id])
+  scannedAt       DateTime     @default(now())
+  gateLocation    String       @default("Main Gate 1")
+
+  @@index([registrationId])
+}
+
+// Low Priority Placeholder Models
+model JudgeScore {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  judgeId      String
+  judge        User     @relation(fields: [judgeId], references: [id])
+  teamId       String?
+  score        Float
+  feedback     String?
+  createdAt    DateTime @default(now())
+
+  // TODO: College dev team can extend scoring rubrics here
+}
+
+model Certificate {
+  id             String   @id @default(cuid())
+  registrationId String
+  certificateUrl String
+  issuedAt       DateTime @default(now())
+
+  // TODO: College dev team can integrate PDF generation pipeline here
+}
+
+model Accommodation {
+  id           String   @id @default(cuid())
+  userId       String
+  hostelBlock  String
+  roomNumber   String
+  checkInDate  DateTime
+  checkOutDate DateTime
+  status       String   @default("ALLOCATED")
+
+  // TODO: College dev team can extend hostel hospitality here
+}
